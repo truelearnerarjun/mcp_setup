@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MCP Server Frontend</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; }
+    h1 { margin-bottom: 8px; }
+    textarea, select, input, button { width: 100%; margin-top: 8px; }
+    textarea { min-height: 150px; font-family: monospace; }
+    pre { background: #f4f4f4; padding: 16px; white-space: pre-wrap; word-wrap: break-word; }
+    .row { display: grid; gap: 12px; }
+    .notes { color: #555; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <h1>MCP Server Frontend</h1>
+  <div class="notes">Select a tool, enter your input, then click Run.</div>
+  <div class="row">
+    <label for="toolSelect">Tool</label>
+    <select id="toolSelect"></select>
+
+    <label for="userInput">Input</label>
+    <textarea id="userInput">import os\nprint("hello")</textarea>
+
+    <button id="runBtn">Run Tool</button>
+
+    <label for="output">Result</label>
+    <pre id="output">Waiting for input...</pre>
+  </div>
+
+  <script>
+    const apiBase = 'https://afe814ffad6744f97a5019d6cff70ce4-2031942274.us-east-1.elb.amazonaws.com:8000';
+    const toolSelect = document.getElementById('toolSelect');
+    const userInput = document.getElementById('userInput');
+    const output = document.getElementById('output');
+    const runBtn = document.getElementById('runBtn');
+
+    async function loadTools() {
+      try {
+        const response = await fetch(`${apiBase}/tools`);
+        const tools = await response.json();
+        toolSelect.innerHTML = '';
+        tools.forEach(tool => {
+          const option = document.createElement('option');
+          option.value = tool.name;
+          option.textContent = `${tool.name} — ${tool.description}`;
+          toolSelect.appendChild(option);
+        });
+      } catch (error) {
+        output.textContent = 'Unable to load tools: ' + error;
+      }
+    }
+
+    runBtn.onclick = async () => {
+      output.textContent = 'Running...';
+      try {
+        const payload = {
+          tool: toolSelect.value,
+          input: userInput.value,
+        };
+        const response = await fetch(`${apiBase}/invoke`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const result = await response.json();
+        output.textContent = JSON.stringify(result, null, 2);
+      } catch (error) {
+        output.textContent = 'Invocation error: ' + error;
+      }
+    };
+
+    loadTools();
+  </script>
+</body>
+</html>
