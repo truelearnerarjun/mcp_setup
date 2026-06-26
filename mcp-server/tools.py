@@ -1,3 +1,7 @@
+import os
+
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
 from typing import Any, Dict, List
 
 
@@ -138,4 +142,53 @@ def backend_developer(input_text: str) -> Dict[str, Any]:
         "tool": "backend_developer",
         "summary": "Reviewed backend system design.",
         "suggestions": suggestions or ["Backend review completed with no major concerns detected."],
+    }
+
+
+def bedrock_text_generator(prompt: str) -> Dict[str, Any]:
+    """Call AWS Bedrock text generation to respond to the prompt."""
+    model_id = os.getenv("BEDROCK_MODEL_ID", "amazon.titan-text-2")
+    region = os.getenv("AWS_REGION", "us-east-1")
+    try:
+        client = boto3.client("bedrock", region_name=region)
+        response = client.invoke_model(
+            modelId=model_id,
+            contentType="text/plain",
+            accept="application/json",
+            body=prompt.encode("utf-8"),
+        )
+        body = response["body"].read().decode("utf-8")
+        return {
+            "tool": "bedrock_text_generator",
+            "model_id": model_id,
+            "response": body,
+        }
+    except (BotoCoreError, ClientError) as exc:
+        return {
+            "tool": "bedrock_text_generator",
+            "error": "Bedrock call failed.",
+            "details": str(exc),
+        }
+
+
+def assistant_agent(input_text: str) -> Dict[str, Any]:
+    """A simple agent tool that either forwards to Bedrock or returns a conversational response."""
+    if os.getenv("BEDROCK_ENABLED", "true").lower() in ("true", "1", "yes"):
+        prompt = "You are an assistant agent. Provide a helpful, concise response to the user input:\n\n" + input_text
+        bedrock_result = bedrock_text_generator(prompt)
+        if bedrock_result.get("response"):
+            return {
+                "tool": "assistant_agent",
+                "summary": "Bedrock-powered assistant response.",
+                "assistant_response": bedrock_result["response"],
+            }
+        return {
+            "tool": "assistant_agent",
+            "error": "Assistant agent Bedrock call failed.",
+            "details": bedrock_result.get("details"),
+        }
+    return {
+        "tool": "assistant_agent",
+        "summary": "Local fallback assistant response.",
+        "assistant_response": f"Echo agent response: {input_text}",
     }

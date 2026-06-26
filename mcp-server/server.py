@@ -5,8 +5,10 @@ from typing import Any, Dict, List
 
 from tools import (
     architecture_diagram_generator,
+    assistant_agent,
     aws_cost_analyzer,
     backend_developer,
+    bedrock_text_generator,
     create_ppt,
     devops_engineer,
     frontend_developer,
@@ -99,6 +101,18 @@ TOOL_REGISTRY = {
         "inputs": ["input_text"],
         "outputs": ["summary", "suggestions"],
         "function": backend_developer,
+    },
+    "bedrock_text_generator": {
+        "description": "Generate text using AWS Bedrock models for flexible assistant responses.",
+        "inputs": ["prompt"],
+        "outputs": ["tool", "model_id", "response"],
+        "function": bedrock_text_generator,
+    },
+    "assistant_agent": {
+        "description": "Run an assistant-style agent backed by Bedrock or a local fallback.",
+        "inputs": ["input_text"],
+        "outputs": ["summary", "assistant_response"],
+        "function": assistant_agent,
     },
 }
 
