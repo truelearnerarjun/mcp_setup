@@ -1,3 +1,4 @@
+import json
 import os
 
 import boto3
@@ -146,22 +147,33 @@ def backend_developer(input_text: str) -> Dict[str, Any]:
 
 
 def bedrock_text_generator(prompt: str) -> Dict[str, Any]:
-    """Call AWS Bedrock text generation to respond to the prompt."""
-    model_id = os.getenv("BEDROCK_MODEL_ID", "amazon.titan-text-2")
+    """Call AWS Bedrock text generation using the Converse API (works with Claude, Nova, etc)."""
+    model_id = os.getenv("BEDROCK_MODEL_ID", "amazon.nova-pro-v1:0")
     region = os.getenv("AWS_REGION", "us-east-1")
     try:
-        client = boto3.client("bedrock", region_name=region)
-        response = client.invoke_model(
+        client = boto3.client("bedrock-runtime", region_name=region)
+        # Use Converse API for universal model support
+        response = client.converse(
             modelId=model_id,
-            contentType="text/plain",
-            accept="application/json",
-            body=prompt.encode("utf-8"),
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"text": prompt}
+                    ]
+                }
+            ],
+            inferenceConfig={
+                "maxTokens": 1024,
+                "temperature": 0.7
+            }
         )
-        body = response["body"].read().decode("utf-8")
+        # Extract text from response
+        generated_text = response["output"]["message"]["content"][0]["text"]
         return {
             "tool": "bedrock_text_generator",
             "model_id": model_id,
-            "response": body,
+            "response": generated_text,
         }
     except (BotoCoreError, ClientError) as exc:
         return {

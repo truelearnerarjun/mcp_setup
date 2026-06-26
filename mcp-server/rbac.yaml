@@ -1,0 +1,55 @@
+---
+# Service Account for MCP Server
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mcp-server
+  namespace: default
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::709097783069:role/mcp-server-bedrock-role
+
+---
+# IAM Role for Bedrock Access (create this separately using AWS CLI or CloudFormation)
+# aws iam create-role \
+#   --role-name mcp-server-bedrock-role \
+#   --assume-role-policy-document file://trust-policy.json
+#
+# Trust policy (trust-policy.json):
+# {
+#   "Version": "2012-10-17",
+#   "Statement": [
+#     {
+#       "Effect": "Allow",
+#       "Principal": {
+#         "Federated": "arn:aws:iam::709097783069:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B716D3041E"
+#       },
+#       "Action": "sts:AssumeRoleWithWebIdentity",
+#       "Condition": {
+#         "StringEquals": {
+#           "oidc.eks.us-east-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B716D3041E:sub": "system:serviceaccount:default:mcp-server"
+#         }
+#       }
+#     }
+#   ]
+# }
+#
+# Inline Policy for Bedrock Access:
+# aws iam put-role-policy \
+#   --role-name mcp-server-bedrock-role \
+#   --policy-name bedrock-invoke \
+#   --policy-document file://bedrock-policy.json
+#
+# bedrock-policy.json:
+# {
+#   "Version": "2012-10-17",
+#   "Statement": [
+#     {
+#       "Effect": "Allow",
+#       "Action": [
+#         "bedrock:InvokeModel",
+#         "bedrock:InvokeModelWithResponseStream"
+#       ],
+#       "Resource": "arn:aws:bedrock:*:709097783069:foundation-model/*"
+#     }
+#   ]
+# }

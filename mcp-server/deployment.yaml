@@ -12,8 +12,16 @@ spec:
       labels:
         app: mcp-server
     spec:
+      serviceAccountName: mcp-server
       containers:
         - name: mcp-server
           image: 709097783069.dkr.ecr.us-east-1.amazonaws.com/mcp-server:latest
           ports:
             - containerPort: 8000
+          env:
+            - name: AWS_REGION
+              value: "us-east-1"
+            - name: BEDROCK_MODEL_ID
+              value: "amazon.nova-pro-v1:0"
+            - name: BEDROCK_ENABLED
+              value: "true"
