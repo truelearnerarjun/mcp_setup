@@ -1,258 +1,443 @@
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>MCP Server Frontend</title>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MCP Studio & AI Agent</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fira+Code&display=swap" rel="stylesheet">
+  <style>
+    /* CSS Variables & Reset */
+    :root {
+      --bg: #0f172a;
+      --bg-panel: rgba(30, 41, 59, 0.7);
+      --border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --success: #10b981;
+      --danger: #ef4444;
+      --font-family: 'Inter', -apple-system, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-family);
+      height: 100vh;
+      display: flex;
+      overflow: hidden;
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.1) 0px, transparent 50%);
+    }
 
-<style>
-  body {
-    font-family: Arial, sans-serif;
-    margin: 24px;
-  }
+    .sidebar {
+      width: 260px;
+      background: var(--bg-panel);
+      backdrop-filter: blur(12px);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 1rem;
+    }
+    .sidebar h2 {
+      font-size: 1.25rem;
+      margin-bottom: 2rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .sidebar-menu {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .menu-item {
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      color: var(--text-muted);
+      transition: all 0.2s;
+      font-weight: 500;
+    }
+    .menu-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text);
+    }
+    .menu-item.active {
+      background: var(--primary);
+      color: white;
+    }
 
-  h1 {
-    margin-bottom: 8px;
-  }
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .header {
+      height: 64px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 2rem;
+      background: rgba(15, 23, 42, 0.5);
+      backdrop-filter: blur(8px);
+    }
+    .header h3 { font-weight: 500; font-size: 1.1rem; }
+    
+    .view {
+      display: none;
+      flex: 1;
+      overflow-y: auto;
+      padding: 2rem;
+    }
+    .view.active {
+      display: flex;
+      flex-direction: column;
+      animation: fadeIn 0.3s ease;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
 
-  textarea,
-  select,
-  button {
-    width: 100%;
-    margin-top: 8px;
-    padding: 10px;
-    box-sizing: border-box;
-  }
+    .form-group {
+      margin-bottom: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    label { font-size: 0.9rem; color: var(--text-muted); font-weight: 500; }
+    select, textarea, input {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 0.75rem 1rem;
+      font-family: var(--font-family);
+      font-size: 1rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      outline: none;
+    }
+    select:focus, textarea:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+    }
+    textarea { min-height: 120px; resize: vertical; font-family: 'Fira Code', monospace; font-size: 0.9rem; }
+    
+    button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+    button:hover { background: var(--primary-hover); }
+    button:active { transform: scale(0.98); }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
 
-  textarea {
-    min-height: 180px;
-    font-family: monospace;
-  }
+    .output-container {
+      margin-top: 2rem;
+      background: #000;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-x: auto;
+      font-family: 'Fira Code', monospace;
+      font-size: 0.85rem;
+      color: #a78bfa;
+      white-space: pre-wrap;
+      min-height: 100px;
+    }
 
-  pre {
-    background: #f4f4f4;
-    padding: 16px;
-    white-space: pre-wrap;
-    word-break: break-word;
-    border-radius: 6px;
-  }
+    .chat-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      max-width: 800px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    .chat-history {
+      flex: 1;
+      overflow-y: auto;
+      padding-bottom: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+    .message {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      max-width: 85%;
+    }
+    .message.user {
+      align-self: flex-end;
+    }
+    .message.user .bubble {
+      background: var(--primary);
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+    .message.agent .bubble {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+    }
+    .bubble {
+      padding: 1rem 1.25rem;
+      border-radius: 12px;
+      line-height: 1.5;
+    }
+    .chat-input-area {
+      position: relative;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.5rem;
+      display: flex;
+      align-items: flex-end;
+      gap: 0.5rem;
+    }
+    .chat-input-area textarea {
+      flex: 1;
+      min-height: 24px;
+      height: 48px;
+      border: none;
+      background: transparent;
+      box-shadow: none;
+      resize: none;
+      padding: 12px 16px;
+      font-family: var(--font-family);
+    }
+    .chat-input-area textarea:focus { box-shadow: none; }
+    .chat-input-area button {
+      padding: 12px;
+      border-radius: 8px;
+      height: 48px;
+      width: 48px;
+    }
 
-  .row {
-    display: grid;
-    gap: 12px;
-  }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
 
-  .notes {
-    color: #555;
-    font-size: 0.9rem;
-    margin-bottom: 16px;
-  }
-
-  button {
-    cursor: pointer;
-  }
-
-  button:disabled {
-    cursor: not-allowed;
-    opacity: 0.6;
-  }
-</style>
+  </style>
 </head>
-
 <body>
 
-<h1>MCP Server Frontend</h1>
+  <div class="sidebar">
+    <h2>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-cpu"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>
+      Nexus AI
+    </h2>
+    <div class="sidebar-menu">
+      <div class="menu-item active" data-target="agent-view">Agent Chat</div>
+      <div class="menu-item" data-target="playground-view">Tool Playground</div>
+    </div>
+  </div>
 
-<div class="notes">
-  Select a tool, enter your input, then click Run (Ctrl + Enter also works).
-</div>
+  <div class="main-content">
+    <div class="header">
+      <h3 id="header-title">Agent Chat (Bedrock Ready)</h3>
+    </div>
 
-<div class="row">
+    <div class="view active" id="agent-view">
+      <div class="chat-container">
+        <div class="chat-history" id="chat-history">
+          <div class="message agent">
+            <div class="bubble">
+              Hello! I am your AI Agent. I will soon be powered by Amazon Bedrock. In the meantime, I have access to your MCP tools. How can I help you?
+            </div>
+          </div>
+        </div>
+        <div class="chat-input-area">
+          <textarea id="chat-input" placeholder="Type a message to the agent..."></textarea>
+          <button id="send-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+          </button>
+        </div>
+      </div>
+    </div>
 
-  <label>Tool</label>
-  <select id="toolSelect" disabled></select>
+    <div class="view" id="playground-view">
+      <div style="max-width: 800px; width: 100%; margin: 0 auto;">
+        <div style="margin-bottom: 2rem; color: var(--text-muted);">
+          Manually test and invoke tools registered on your EKS MCP Server.
+        </div>
+        
+        <div class="form-group">
+          <label for="toolSelect">Available Tools</label>
+          <select id="toolSelect">
+            <option>Loading tools...</option>
+          </select>
+        </div>
 
-  <label>Input</label>
-  <textarea id="userInput">import os
-print("hello")</textarea>
+        <div class="form-group">
+          <label for="userInput">Tool Input (JSON or Plain Text)</label>
+          <textarea id="userInput">import os&#10;print("hello")</textarea>
+        </div>
 
-  <button id="runBtn">Run Tool</button>
+        <button id="runBtn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          Execute Tool
+        </button>
 
-  <label>Result</label>
-  <pre id="output">Loading tools...</pre>
+        <div class="form-group" style="margin-top: 2rem;">
+          <label>Execution Result</label>
+          <div class="output-container" id="output">Waiting for execution...</div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-</div>
-<script>
+  <script>
+    const apiBase = 'http://afe814ffad6744f97a5019d6cff70ce4-2031942274.us-east-1.elb.amazonaws.com:8000';
+    const menuItems = document.querySelectorAll('.menu-item');
+    const views = document.querySelectorAll('.view');
+    const headerTitle = document.getElementById('header-title');
+    const toolSelect = document.getElementById('toolSelect');
+    const userInput = document.getElementById('userInput');
+    const output = document.getElementById('output');
+    const runBtn = document.getElementById('runBtn');
+    const chatInput = document.getElementById('chat-input');
+    const sendBtn = document.getElementById('send-btn');
+    const chatHistory = document.getElementById('chat-history');
 
-const apiBase = "http://afe814ffad6744f97a5019d6cff70ce4-2031942274.us-east-1.elb.amazonaws.com:8000";
-// If your ALB has HTTPS enabled, use:
-// const apiBase = "https://afe814ffad6744f97a5019d6cff70ce4-2031942274.us-east-1.elb.amazonaws.com";
+    menuItems.forEach(item => {
+      item.addEventListener('click', () => {
+        menuItems.forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+        const targetId = item.getAttribute('data-target');
+        views.forEach(v => v.classList.remove('active'));
+        document.getElementById(targetId).classList.add('active');
+        headerTitle.textContent = item.textContent + (targetId === 'agent-view' ? ' (Bedrock Ready)' : '');
+      });
+    });
 
-const toolSelect = document.getElementById("toolSelect");
-const userInput = document.getElementById("userInput");
-const output = document.getElementById("output");
-const runBtn = document.getElementById("runBtn");
-
-let retryTimer = null;
-
-// Disable controls until tools are loaded
-toolSelect.disabled = true;
-runBtn.disabled = true;
-
-// Load available tools
-async function loadTools() {
-
-    output.textContent = "Loading tools...";
-
-    try {
-
+    async function loadTools() {
+      try {
         const response = await fetch(`${apiBase}/tools`);
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-
-        const contentType = response.headers.get("content-type") || "";
-
-        let data;
-
-        if (contentType.includes("application/json")) {
-            data = await response.json();
-        } else {
-            throw new Error("Server did not return JSON.");
-        }
-
-        const tools = Array.isArray(data)
-            ? data
-            : (data.tools || []);
-
-        toolSelect.innerHTML = "";
-
+        const tools = await response.json();
+        toolSelect.innerHTML = '';
         if (tools.length === 0) {
-            output.textContent = "No tools available.";
-            return;
+          toolSelect.innerHTML = '<option>No tools found</option>';
+          return;
         }
-
         tools.forEach(tool => {
-
-            const option = document.createElement("option");
-
-            option.value = tool.name;
-            option.textContent = `${tool.name} - ${tool.description}`;
-
-            toolSelect.appendChild(option);
-
+          const option = document.createElement('option');
+          option.value = tool.name;
+          option.textContent = `${tool.name} — ${tool.description || 'No description'}`;
+          toolSelect.appendChild(option);
         });
-
-        toolSelect.disabled = false;
-        runBtn.disabled = false;
-
-        clearTimeout(retryTimer);
-
-        output.textContent = ":white_check_mark: Tools loaded successfully.";
-
+      } catch (error) {
+        toolSelect.innerHTML = '<option>Error loading tools</option>';
+        output.textContent = 'Unable to connect to MCP Server.\n' + error;
+        output.style.color = 'var(--danger)';
+      }
     }
 
-    catch (err) {
-
-        output.textContent =
-            ":x: Unable to load tools.\n\n" +
-            err.message +
-            "\n\nRetrying in 3 seconds...";
-
-        clearTimeout(retryTimer);
-
-        retryTimer = setTimeout(loadTools, 3000);
-
-    }
-
-}
-
-// Run selected tool
-async function runTool() {
-
-    if (!toolSelect.value) {
-        output.textContent = "Please select a tool.";
-        return;
-    }
-
-    if (!userInput.value.trim()) {
-        output.textContent = "Please enter input.";
-        return;
-    }
-
-    runBtn.disabled = true;
-
-    output.textContent = "Running...";
-
-    try {
-
+    runBtn.onclick = async () => {
+      output.textContent = 'Processing...';
+      output.style.color = 'var(--text-muted)';
+      runBtn.disabled = true;
+      try {
         const payload = {
-
-            tool: toolSelect.value,
-            input: userInput.value
-
+          tool: toolSelect.value,
+          input: userInput.value,
         };
-
         const response = await fetch(`${apiBase}/invoke`, {
-
-            method: "POST",
-
-            headers: {
-
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-
-            },
-
-            body: JSON.stringify(payload)
-
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
         });
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-
-        const contentType = response.headers.get("content-type") || "";
-
-        let result;
-
-        if (contentType.includes("application/json")) {
-            result = await response.json();
-            output.textContent = JSON.stringify(result, null, 2);
-        } else {
-            result = await response.text();
-            output.textContent = result;
-        }
-
-    }
-
-    catch (err) {
-
-        output.textContent =
-            ":x: Invocation Error\n\n" +
-            err.message;
-
-    }
-
-    finally {
-
+        const result = await response.json();
+        output.textContent = JSON.stringify(result, null, 2);
+        output.style.color = '#a78bfa';
+      } catch (error) {
+        output.textContent = 'Invocation error:\n' + error;
+        output.style.color = 'var(--danger)';
+      } finally {
         runBtn.disabled = false;
+      }
+    };
 
+    function addChatMessage(role, text) {
+      const msgDiv = document.createElement('div');
+      msgDiv.className = `message ${role}`;
+      msgDiv.innerHTML = `<div class="bubble">${text.replace(/\n/g, '<br>')}</div>`;
+      chatHistory.appendChild(msgDiv);
+      chatHistory.scrollTop = chatHistory.scrollHeight;
     }
 
-}
+    sendBtn.onclick = async () => {
+      const text = chatInput.value.trim();
+      if (!text) return;
+      addChatMessage('user', text);
+      chatInput.value = '';
+      sendBtn.disabled = true;
+      const typingId = 'typing-' + Date.now();
+      const typingDiv = document.createElement('div');
+      typingDiv.className = 'message agent';
+      typingDiv.id = typingId;
+      typingDiv.innerHTML = `<div class="bubble" style="opacity: 0.7;">Thinking...</div>`;
+      chatHistory.appendChild(typingDiv);
+      chatHistory.scrollTop = chatHistory.scrollHeight;
+      try {
+        const payload = {
+          tool: 'assistant_agent',
+          input: text,
+        };
+        const response = await fetch(`${apiBase}/invoke`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+        document.getElementById(typingId).remove();
+        if (!response.ok) {
+          const errorMsg = data.detail ? (typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)) : 'HTTP Error ' + response.status;
+          addChatMessage('agent', `**Server Error**: ${errorMsg}`);
+          return;
+        }
+        if (data.result && data.result.assistant_response) {
+          addChatMessage('agent', data.result.assistant_response);
+        } else if (data.result && data.result.error) {
+          addChatMessage('agent', `**Error**: ${data.result.error}\n${data.result.details || ''}`);
+        } else {
+          addChatMessage('agent', 'Received an unexpected response from Bedrock:\n' + JSON.stringify(data));
+        }
+      } catch (error) {
+        document.getElementById(typingId).remove();
+        addChatMessage('agent', 'Failed to connect to the backend: ' + error);
+      } finally {
+        sendBtn.disabled = false;
+      }
+    };
 
-runBtn.addEventListener("click", runTool);
-
-// Ctrl + Enter shortcut
-userInput.addEventListener("keydown", function(e) {
-
-    if (e.ctrlKey && e.key === "Enter") {
+    chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        runTool();
-    }
+        sendBtn.click();
+      }
+    });
 
-});
-
-// Load tools on startup
-loadTools();
-
-</script>
+    loadTools();
+  </script>
+</body>
+</html>
