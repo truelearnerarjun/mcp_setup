@@ -8,6 +8,7 @@ An MCP server for skill analysis, code review, document summarization, and EKS d
 - `MCP_POC_DOCUMENTATION.md` - legacy POC notes
 - `MCP_POC_ACTUAL.md` - current implementation summary
 - `PROJECT_COMMANDS.md` - commands for local, Docker, Kubernetes, and Git flows
+- `RUN_PROJECT.md` - step-by-step runbook for frontend, EKS backend, and redeploys
 
 ## Quick start
 1. Build and push the Docker image to ECR.
@@ -16,4 +17,4 @@ An MCP server for skill analysis, code review, document summarization, and EKS d
 4. Use `/tools`, `/invoke`, and `/summarize-file` for API testing.
 
 ## Documentation
-See `MCP_POC_ACTUAL.md` for the current behavior and `PROJECT_COMMANDS.md` for commands.
+See `RUN_PROJECT.md` for the normal run steps, `MCP_POC_ACTUAL.md` for the current behavior, and `PROJECT_COMMANDS.md` for the full command reference.
