@@ -1,9 +1,26 @@
-import json
 import os
+import re
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 from typing import Any, Dict, List
+
+
+SKILL_KEYWORDS = [
+    "review", "code", "python", "bug", "debug", "tool", "prompt", "summarize",
+    "document", "architecture", "diagram", "aws", "cost", "sql", "query",
+    "frontend", "backend", "devops", "deploy", "deployment", "test", "quality",
+    "agent", "assistant", "mcp", "skill", "design", "api", "database"
+]
+
+
+def is_skill_related(text: str) -> bool:
+    """Return True only when the prompt appears to request a software engineering or tool-related task."""
+    normalized = re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+    if not normalized:
+        return False
+    tokens = set(normalized.split())
+    return bool(tokens & set(SKILL_KEYWORDS)) or any(keyword in normalized for keyword in ["review", "summarize", "design", "deploy", "backend", "frontend", "sql", "python", "aws"])
 
 
 def review_python_code(code: str) -> Dict[str, Any]:
@@ -147,33 +164,22 @@ def backend_developer(input_text: str) -> Dict[str, Any]:
 
 
 def bedrock_text_generator(prompt: str) -> Dict[str, Any]:
-    """Call AWS Bedrock text generation using the Converse API (works with Claude, Nova, etc)."""
-    model_id = os.getenv("BEDROCK_MODEL_ID", "amazon.nova-pro-v1:0")
+    """Call AWS Bedrock text generation to respond to the prompt."""
+    model_id = os.getenv("BEDROCK_MODEL_ID", "amazon.titan-text-2")
     region = os.getenv("AWS_REGION", "us-east-1")
     try:
-        client = boto3.client("bedrock-runtime", region_name=region)
-        # Use Converse API for universal model support
-        response = client.converse(
+        client = boto3.client("bedrock", region_name=region)
+        response = client.invoke_model(
             modelId=model_id,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"text": prompt}
-                    ]
-                }
-            ],
-            inferenceConfig={
-                "maxTokens": 1024,
-                "temperature": 0.7
-            }
+            contentType="text/plain",
+            accept="application/json",
+            body=prompt.encode("utf-8"),
         )
-        # Extract text from response
-        generated_text = response["output"]["message"]["content"][0]["text"]
+        body = response["body"].read().decode("utf-8")
         return {
             "tool": "bedrock_text_generator",
             "model_id": model_id,
-            "response": generated_text,
+            "response": body,
         }
     except (BotoCoreError, ClientError) as exc:
         return {
@@ -184,9 +190,16 @@ def bedrock_text_generator(prompt: str) -> Dict[str, Any]:
 
 
 def assistant_agent(input_text: str) -> Dict[str, Any]:
-    """A simple agent tool that either forwards to Bedrock or returns a conversational response."""
+    """A guardrailed assistant tool that only answers skill-related prompts."""
+    if not is_skill_related(input_text):
+        return {
+            "tool": "assistant_agent",
+            "summary": "Guardrail triggered: off-scope prompt.",
+            "assistant_response": "I can only help with skill-related or MCP-tool requests such as code review, architecture, deployment, testing, or documentation tasks.",
+        }
+
     if os.getenv("BEDROCK_ENABLED", "true").lower() in ("true", "1", "yes"):
-        prompt = "You are an assistant agent. Provide a helpful, concise response to the user input:\n\n" + input_text
+        prompt = "You are a helpful assistant restricted to skill-related software engineering tasks. Answer only if the user asks about code review, architecture, deployment, testing, documentation, or similar engineering topics. Otherwise refuse politely. User input:\n\n" + input_text
         bedrock_result = bedrock_text_generator(prompt)
         if bedrock_result.get("response"):
             return {
@@ -202,5 +215,5 @@ def assistant_agent(input_text: str) -> Dict[str, Any]:
     return {
         "tool": "assistant_agent",
         "summary": "Local fallback assistant response.",
-        "assistant_response": f"Echo agent response: {input_text}",
+        "assistant_response": f"Skill-related assistance: {input_text}",
     }
