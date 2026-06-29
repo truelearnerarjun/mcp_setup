@@ -116,6 +116,71 @@ def contains_any(normalized_text: str, phrases: List[str]) -> bool:
     return any(normalize_text(phrase) in normalized_text for phrase in phrases)
 
 
+GENERAL_INTENT_PHRASES = [
+    "review",
+    "check",
+    "inspect",
+    "analyze",
+    "analyse",
+    "look at",
+    "look into",
+    "see if",
+    "find",
+    "spot",
+    "detect",
+    "identify",
+    "is there",
+    "any issue",
+    "any issues",
+    "any error",
+    "any errors",
+    "problem",
+    "problems",
+    "bug",
+    "bugs",
+    "fix",
+    "improve",
+    "suggest",
+]
+
+CONTENT_HINT_PHRASES = [
+    "code",
+    "api",
+    "error",
+    "errors",
+    "issue",
+    "issues",
+    "bug",
+    "bugs",
+    "design",
+    "layout",
+    "page",
+    "website",
+    "webpage",
+    "ppt",
+    "powerpoint",
+    "summary",
+    "summarize",
+    "sql",
+    "query",
+    "architecture",
+    "frontend",
+    "backend",
+    "devops",
+    "quality",
+    "testing",
+    "bedrock",
+]
+
+
+def has_intent(normalized_query: str) -> bool:
+    return contains_any(normalized_query, GENERAL_INTENT_PHRASES)
+
+
+def has_content_hint(normalized_query: str) -> bool:
+    return contains_any(normalized_query, CONTENT_HINT_PHRASES)
+
+
 CONTACT_LINE_PATTERNS = [
     r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b",
     r"\b(?:\+?\d[\d\s().-]{7,}\d)\b",
@@ -284,72 +349,91 @@ def looks_like_backend_code(input_text: str) -> bool:
 
 def is_python_code_review_request(input_text: str) -> bool:
     normalized_query = normalize_text(input_text)
-    review_words = {"review", "check", "analyze", "fix", "improve", "debug"}
-    asks_for_review = any(word in normalized_query.split() for word in review_words)
-    mentions_code = "code" in normalized_query or looks_like_python_code(input_text)
-
-    return asks_for_review and mentions_code and looks_like_python_code(input_text)
+    return has_intent(normalized_query) and (
+        "code" in normalized_query or looks_like_python_code(input_text)
+    ) and looks_like_python_code(input_text)
 
 
 def is_backend_review_request(input_text: str, normalized_query: str) -> bool:
-    review_words = {"review", "check", "analyze", "fix", "improve", "debug"}
-    asks_for_review = any(word in normalized_query.split() for word in review_words)
+    asks_for_review = has_intent(normalized_query)
     mentions_backend = contains_any(
         normalized_query,
-        ["backend", "back end", "api", "server", "java", "spring", "node", "express", "fastapi"],
+        [
+            "backend",
+            "back end",
+            "api",
+            "server",
+            "service",
+            "java",
+            "spring",
+            "node",
+            "express",
+            "fastapi",
+            "rest",
+            "controller",
+        ],
     )
 
     return asks_for_review and mentions_backend and (
-        "code" in normalized_query or looks_like_backend_code(input_text)
+        "code" in normalized_query
+        or has_content_hint(normalized_query)
+        or looks_like_backend_code(input_text)
     )
 
 
 def is_create_ppt_request(normalized_query: str) -> bool:
-    return contains_any(
+    return has_intent(normalized_query) and contains_any(
         normalized_query,
         ["ppt", "powerpoint", "presentation", "slide", "slides"],
-    ) and contains_any(
-        normalized_query,
-        ["create", "make", "generate", "need", "prepare", "build"],
     )
 
 
 def is_summarize_document_request(normalized_query: str) -> bool:
-    return contains_any(
+    return has_intent(normalized_query) and contains_any(
         normalized_query,
         ["summarize", "summary", "document summary", "summarization"],
     )
 
 
 def is_aws_cost_request(normalized_query: str) -> bool:
-    return contains_any(normalized_query, ["aws", "cloud"]) and contains_any(
+    return has_intent(normalized_query) and contains_any(normalized_query, ["aws", "cloud"]) and contains_any(
         normalized_query,
-        ["cost", "billing", "spend", "pricing", "optimization"],
+        ["cost", "billing", "spend", "pricing", "optimization", "expense"],
     )
 
 
 def is_sql_request(normalized_query: str) -> bool:
-    return contains_any(
+    return has_intent(normalized_query) and contains_any(
         normalized_query,
         ["sql", "query", "database query", "select", "insert", "update", "delete"],
     )
 
 
 def is_architecture_diagram_request(normalized_query: str) -> bool:
-    return contains_any(
+    return has_intent(normalized_query) and contains_any(
         normalized_query,
         ["architecture", "diagram", "cloud design", "system design"],
     )
 
 
 def is_engineering_review_request(normalized_query: str) -> bool:
-    return contains_any(
+    return has_intent(normalized_query) and contains_any(
         normalized_query,
         [
+            "webpage",
+            "website",
+            "page design",
+            "design quality",
+            "ui design",
             "frontend",
             "front end",
             "ui",
             "ux",
+            "layout",
+            "styling",
+            "typography",
+            "responsive",
+            "responsive design",
             "accessibility",
             "backend",
             "back end",
@@ -372,7 +456,7 @@ def is_engineering_review_request(normalized_query: str) -> bool:
 
 
 def is_bedrock_text_generation_request(normalized_query: str) -> bool:
-    return contains_any(
+    return has_intent(normalized_query) and contains_any(
         normalized_query,
         ["bedrock", "aws bedrock", "text generation", "llm"],
     )
@@ -489,10 +573,15 @@ def architecture_diagram_generator(description: str) -> Dict[str, Any]:
 def frontend_developer(input_text: str) -> Dict[str, Any]:
     """Review frontend development concerns."""
     issues: List[str] = []
-    if "accessibility" not in input_text.lower():
+    normalized_input = input_text.lower()
+    if "accessibility" not in normalized_input:
         issues.append("Check accessibility for keyboard navigation and screen readers.")
-    if "performance" not in input_text.lower():
+    if "performance" not in normalized_input:
         issues.append("Evaluate frontend performance, bundle size, and rendering speed.")
+    if not any(term in normalized_input for term in ["design", "layout", "typography", "spacing", "responsive"]):
+        issues.append("Review visual hierarchy, spacing, and responsive behavior.")
+    if not any(term in normalized_input for term in ["error", "issue", "bug", "problem", "interaction"]):
+        issues.append("Check for broken interactions, button states, and feedback messages.")
     return {
         "tool": "frontend_developer",
         "summary": "Reviewed frontend considerations.",
