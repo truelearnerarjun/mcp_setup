@@ -70,7 +70,7 @@ Make sure `frontend/index.html` points to the local backend only for local devel
 
 ```js
 // const apiBase = 'http://localhost:8000';
-const apiBase = 'http://mcp-server-REPLACE-WITH-ALB-ADDRESS';
+const apiBase = 'http://k8s-default-mcpserve-9572bfb994-1376550949.us-east-1.elb.amazonaws.com';
 ```
 
 ## Environment Variables
