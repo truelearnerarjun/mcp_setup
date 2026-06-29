@@ -7,8 +7,15 @@ from pydantic import BaseModel
 from typing import Any, Dict, List
 from io import BytesIO
 
-from docx import Document
-from pypdf import PdfReader
+try:
+    from docx import Document
+except ImportError:
+    Document = None
+
+try:
+    from pypdf import PdfReader
+except ImportError:
+    PdfReader = None
 
 from tools import (
     architecture_diagram_generator,
@@ -69,6 +76,8 @@ def extract_text_from_txt(file_bytes: bytes) -> str:
 
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
+    if PdfReader is None:
+        raise HTTPException(status_code=500, detail="PDF support is not installed on the server.")
     try:
         reader = PdfReader(BytesIO(file_bytes))
         page_text = []
@@ -84,6 +93,8 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
 
 
 def extract_text_from_docx(file_bytes: bytes) -> str:
+    if Document is None:
+        raise HTTPException(status_code=500, detail="DOCX support is not installed on the server.")
     try:
         document = Document(BytesIO(file_bytes))
     except Exception as exc:
@@ -215,16 +226,29 @@ def list_tools() -> List[ToolInfo]:
 
 @app.post("/invoke")
 def invoke_tool(request: ToolRequest) -> Dict[str, Any]:
-    tool_info = TOOL_REGISTRY.get(request.tool)
-    if not tool_info:
-        raise HTTPException(status_code=404, detail="Tool not found")
+    try:
+        tool_info = TOOL_REGISTRY.get(request.tool)
+        if not tool_info:
+            raise HTTPException(status_code=404, detail="Tool not found")
 
-    result = tool_info["function"](request.input)
-    return {
-        "tool": request.tool,
-        "input": request.input,
-        "result": result,
-    }
+        result = tool_info["function"](request.input)
+        return {
+            "tool": request.tool,
+            "input": request.input,
+            "result": result,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        return {
+            "tool": request.tool,
+            "input": request.input,
+            "result": {
+                "tool": request.tool,
+                "error": "Tool invocation failed.",
+                "details": str(exc),
+            },
+        }
 
 
 @app.post("/summarize-file")

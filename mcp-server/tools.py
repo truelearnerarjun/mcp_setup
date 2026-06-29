@@ -653,17 +653,34 @@ def bedrock_text_generator(prompt: str) -> Dict[str, Any]:
                 "temperature": 0.7
             }
         )
-        # Extract text from response
-        generated_text = response["output"]["message"]["content"][0]["text"]
+        # Extract text from response safely.
+        generated_text = ""
+        output = response.get("output", {})
+        message = output.get("message", {}) if isinstance(output, dict) else {}
+        content = message.get("content", []) if isinstance(message, dict) else []
+        if content and isinstance(content[0], dict):
+            generated_text = content[0].get("text", "") or ""
+        if not generated_text:
+            return {
+                "tool": "bedrock_text_generator",
+                "error": "Bedrock returned an empty response.",
+                "details": str(response)[:2000],
+            }
         return {
             "tool": "bedrock_text_generator",
             "model_id": model_id,
             "response": generated_text,
         }
-    except (BotoCoreError, ClientError) as exc:
+    except (BotoCoreError, ClientError, KeyError, IndexError, TypeError, ValueError) as exc:
         return {
             "tool": "bedrock_text_generator",
             "error": "Bedrock call failed.",
+            "details": str(exc),
+        }
+    except Exception as exc:
+        return {
+            "tool": "bedrock_text_generator",
+            "error": "Unexpected Bedrock failure.",
             "details": str(exc),
         }
 
@@ -771,7 +788,13 @@ def assistant_agent(input_text: str) -> Dict[str, Any]:
             "User input:\n"
             + input_text
         )
-        bedrock_result = bedrock_text_generator(prompt)
+        try:
+            bedrock_result = bedrock_text_generator(prompt)
+        except Exception as exc:
+            bedrock_result = {
+                "error": "Bedrock call failed.",
+                "details": str(exc),
+            }
         if bedrock_result.get("response"):
             return {
                 "tool": "assistant_agent",
