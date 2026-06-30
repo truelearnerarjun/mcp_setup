@@ -1,112 +1,57 @@
 # MCP Server POC Documentation
 
 ## Overview
-This POC demonstrates a simple Model Context Protocol (MCP) server running on AWS EKS, with tools registered for AI client discovery and invocation.
+This repository contains a FastAPI-based MCP server, a browser frontend, and Kubernetes manifests for deploying the backend on EKS.
 
-The architecture includes:
-- `mcp-server/` — FastAPI-based MCP tool server
-- `frontend/` — browser UI for tool selection and invocation
-- AWS ECR — container registry for the Docker image
-- AWS EKS — Kubernetes cluster hosting the MCP server
+The current implementation supports:
+- Tool discovery through `GET /tools`
+- Tool invocation through `POST /invoke`
+- Document upload and summarization through `POST /summarize-file`
+- Browser chat for skills-related prompts only
+- Local fallback behavior when Bedrock is disabled
 
-## Project structure
+## What The App Actually Does
 
-```
-/mcp_setup
-├── MCP_POC_PLAN.md
-├── MCP_POC_DOCUMENTATION.md
-├── README.md
-├── frontend/
-│   └── index.html
-└── mcp-server/
-    ├── Dockerfile
-    ├── README.md
-    ├── deployment.yaml
-    ├── requirements.txt
-    ├── server.py
-    ├── service.yaml
-    └── tools.py
-```
+### Agent chat
+- Accepts only skills-related prompts
+- Allows code review, PPT generation, summarization, SQL help, architecture diagrams, frontend/backend review, DevOps review, quality review, and Bedrock text generation
+- Rejects unrelated prompts outside the registered MCP skill scope
 
-## Components
+### File summarization
+- Accepts `.txt`, `.pdf`, and `.docx` uploads
+- Extracts text from the uploaded file
+- Filters obvious contact and metadata noise from summaries
+- Produces a short summary plus key points
 
-### MCP Server
-- `mcp-server/server.py` exposes:
-  - `GET /` health check
-  - `GET /tools` tool discovery
-  - `POST /invoke` tool invocation
-- `mcp-server/tools.py` defines tool handlers such as:
-  - `review_python_code`
-  - `create_ppt`
-  - `summarize_document`
-  - `aws_cost_analyzer`
-  - `sql_generator`
-  - `architecture_diagram_generator`
-  - `frontend_developer`
-  - `devops_engineer`
-  - `quality_engineer`
-  - `backend_developer`
+### Backend behavior
+- Reads full document content with a configurable extraction cap
+- Uses threadpool execution for upload extraction and summarization
+- Supports Bedrock-backed responses when `BEDROCK_ENABLED=true`
+- Falls back to local summaries and reviews when Bedrock is disabled or unavailable
 
-### Frontend
-- `frontend/index.html` provides a minimal browser UI
-- It loads available tools from `/tools`
-- It sends `POST /invoke` requests with tool and input
-- It displays tool output in the browser
+## Deployment Model
 
-## Deployment flow
+The backend is meant to run in Kubernetes on EKS:
+- `mcp-server/deployment.yaml` runs the container
+- `mcp-server/service.yaml` exposes the service internally
+- `mcp-server/ingress.yaml` routes traffic through an AWS ALB
+- `mcp-server/rbac.yaml` provides the service account and Bedrock role annotation
 
-1. Build the Docker image:
-   ```bash
-   docker build -t mcp-server .
-   ```
-2. Push the image to ECR:
-   ```bash
-   docker tag mcp-server:latest 709097783069.dkr.ecr.us-east-1.amazonaws.com/mcp-server:latest
-   docker push 709097783069.dkr.ecr.us-east-1.amazonaws.com/mcp-server:latest
-   ```
-3. Update the Kubernetes deployment image:
-   - `mcp-server/deployment.yaml` contains the ECR image reference
-4. Deploy to EKS:
-   ```bash
-   kubectl apply -f /workspaces/mcp_setup/mcp-server/deployment.yaml
-   kubectl apply -f /workspaces/mcp_setup/mcp-server/service.yaml
-   ```
+## Local Development
 
-## Verification
+For local testing:
+- Run the backend on `http://localhost:8000`
+- Serve the frontend separately on `http://localhost:3000`
+- Switch `frontend/index.html` to the local backend URL only when developing locally
 
-### Confirm deployment
-```bash
-kubectl get deployments
-kubectl get pods
-kubectl get svc
-```
+## API Endpoints
 
-### Verify service endpoint
-Use the `LoadBalancer` hostname from `kubectl get svc`:
-```bash
-curl http://<external-dns>:8000/tools
-curl http://<external-dns>:8000/
-```
-
-### Invoke a tool manually
-```bash
-curl -X POST "http://<external-dns>:8000/invoke" \
-  -H "Content-Type: application/json" \
-  -d '{"tool":"review_python_code","input":"import os\nprint(\"hello\")"}'
-```
-
-## Browser frontend usage
-
-1. Open `frontend/index.html` in a browser
-2. Select a tool from the dropdown
-3. Enter input text
-4. Click `Run Tool`
-5. View the returned result in the output pane
-
-> Note: The frontend currently points to the deployed EKS LoadBalancer URL. Update `apiBase` in `frontend/index.html` if the endpoint changes.
+- `GET /` - health check
+- `GET /tools` - list registered MCP tools
+- `POST /invoke` - invoke a tool by name
+- `POST /summarize-file` - upload and summarize a `.txt`, `.pdf`, or `.docx` file
 
 ## Notes
 
-- CORS support was enabled in `mcp-server/server.py` to allow browser access.
-- This POC is intentionally minimal so you can iterate on tools and UI quickly.
-- The server can be extended with richer tool behaviors and better input validation.
+- The frontend has a commented local backend URL and an ALB URL placeholder for deployment.
+- The summary endpoint is optimized for readable text extraction, but scanned PDFs may still require OCR outside this repo.

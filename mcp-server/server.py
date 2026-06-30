@@ -1,7 +1,21 @@
-from fastapi import FastAPI, HTTPException
+import os
+
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from typing import Any, Dict, List
+from io import BytesIO
+
+try:
+    from docx import Document
+except ImportError:
+    Document = None
+
+try:
+    from pypdf import PdfReader
+except ImportError:
+    PdfReader = None
 
 from tools import (
     architecture_diagram_generator,
@@ -39,6 +53,86 @@ class ToolInfo(BaseModel):
     description: str
     inputs: List[str]
     outputs: List[str]
+
+
+ALLOWED_SUMMARY_EXTENSIONS = {".txt", ".pdf", ".docx"}
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+MAX_EXTRACTED_CHARS = int(os.getenv("MAX_EXTRACTED_CHARS", "1000000"))
+
+
+def get_file_extension(filename: str) -> str:
+    if "." not in filename:
+        return ""
+    return "." + filename.rsplit(".", 1)[1].lower()
+
+
+def extract_text_from_txt(file_bytes: bytes) -> str:
+    for encoding in ("utf-8", "utf-16", "latin-1"):
+        try:
+            return file_bytes.decode(encoding)[:MAX_EXTRACTED_CHARS]
+        except UnicodeDecodeError:
+            continue
+    raise HTTPException(status_code=400, detail="Unable to decode text file.")
+
+
+def extract_text_from_pdf(file_bytes: bytes) -> str:
+    if PdfReader is None:
+        raise HTTPException(status_code=500, detail="PDF support is not installed on the server.")
+    try:
+        reader = PdfReader(BytesIO(file_bytes))
+        page_text = []
+        for page in reader.pages:
+            extracted = page.extract_text() or ""
+            if extracted.strip():
+                page_text.append(extracted.strip())
+            if sum(len(text) for text in page_text) >= MAX_EXTRACTED_CHARS:
+                break
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Unable to read PDF file: {exc}") from exc
+    return "\n\n".join(page_text)[:MAX_EXTRACTED_CHARS]
+
+
+def extract_text_from_docx(file_bytes: bytes) -> str:
+    if Document is None:
+        raise HTTPException(status_code=500, detail="DOCX support is not installed on the server.")
+    try:
+        document = Document(BytesIO(file_bytes))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Unable to read DOCX file: {exc}") from exc
+
+    paragraphs = []
+    for paragraph in document.paragraphs:
+        text = paragraph.text.strip()
+        if text:
+            paragraphs.append(text)
+        if sum(len(value) for value in paragraphs) >= MAX_EXTRACTED_CHARS:
+            break
+    table_cells = [
+        cell.text.strip()
+        for table in document.tables
+        for row in table.rows
+        for cell in row.cells
+        if cell.text.strip()
+    ]
+    combined_text = "\n".join(paragraphs + table_cells)
+    return combined_text[:MAX_EXTRACTED_CHARS]
+
+
+def extract_text_from_upload(filename: str, file_bytes: bytes) -> str:
+    extension = get_file_extension(filename)
+    if extension not in ALLOWED_SUMMARY_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported file type. Upload a .txt, .pdf, or .docx file.",
+        )
+    if len(file_bytes) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=400, detail="File is too large. Maximum size is 10 MB.")
+
+    if extension == ".txt":
+        return extract_text_from_txt(file_bytes)
+    if extension == ".pdf":
+        return extract_text_from_pdf(file_bytes)
+    return extract_text_from_docx(file_bytes)
 
 
 TOOL_REGISTRY = {
@@ -132,15 +226,72 @@ def list_tools() -> List[ToolInfo]:
 
 @app.post("/invoke")
 def invoke_tool(request: ToolRequest) -> Dict[str, Any]:
-    tool_info = TOOL_REGISTRY.get(request.tool)
-    if not tool_info:
-        raise HTTPException(status_code=404, detail="Tool not found")
+    try:
+        tool_info = TOOL_REGISTRY.get(request.tool)
+        if not tool_info:
+            raise HTTPException(status_code=404, detail="Tool not found")
 
-    result = tool_info["function"](request.input)
+        result = tool_info["function"](request.input)
+        return {
+            "tool": request.tool,
+            "input": request.input,
+            "result": result,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        return {
+            "tool": request.tool,
+            "input": request.input,
+            "result": {
+                "tool": request.tool,
+                "error": "Tool invocation failed.",
+                "details": str(exc),
+            },
+        }
+
+
+@app.post("/summarize-file")
+async def summarize_file(
+    file: UploadFile = File(...),
+    instruction: str = Form("summarize this document"),
+) -> Dict[str, Any]:
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    extracted_text = await run_in_threadpool(
+        extract_text_from_upload,
+        file.filename or "",
+        file_bytes,
+    )
+    if not extracted_text.strip():
+        raise HTTPException(status_code=400, detail="No readable text found in uploaded file.")
+
+    summary_input = extracted_text.strip()
+    result = await run_in_threadpool(summarize_document, summary_input)
+    assistant_response = (
+        f"Summary for {file.filename}\n\n"
+        f"{result['summary']}\n\n"
+        "Key points:\n"
+        + "\n".join(f"- {point}" for point in result["key_points"])
+        + f"\n\nRecommendation: {result['recommendation']}"
+    )
+    was_truncated = len(extracted_text) >= MAX_EXTRACTED_CHARS
+
     return {
-        "tool": request.tool,
-        "input": request.input,
-        "result": result,
+        "tool": "summarize_document",
+        "filename": file.filename,
+        "input": instruction,
+        "result": {
+            **result,
+            "assistant_response": assistant_response,
+            "extracted_characters": len(extracted_text),
+            "source_file": file.filename,
+            "source_type": get_file_extension(file.filename or ""),
+            "truncated": was_truncated,
+            "instruction": instruction,
+        },
     }
 
 

@@ -1,33 +1,25 @@
 # MCP Server POC
 
-This project demonstrates a simple MCP server that registers tools and exposes them over HTTP.
+FastAPI-based MCP server for skills-focused agent chat, tool discovery, and document summarization.
 
-## Setup
+## Local Setup
 
-1. Create and activate a virtual environment:
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   ```
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Run the server:
-   ```bash
-   uvicorn server:app --reload --host 0.0.0.0 --port 8000
-   ```
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python -m uvicorn server:app --reload --host 0.0.0.0 --port 8000
+```
 
 ## Endpoints
 
 - `GET /` - health check
 - `GET /tools` - list registered tools
-- `POST /invoke` - invoke a tool
+- `POST /invoke` - invoke a registered tool
+- `POST /summarize-file` - upload and summarize `.txt`, `.pdf`, or `.docx`
 
-## Example invoke request
+## Notes
 
-```bash
-curl -X POST http://localhost:8000/invoke \
-  -H "Content-Type: application/json" \
-  -d '{"tool": "review_python_code", "input": "import os\nprint(\"hello\")"}'
-```
+- `assistant_agent` only responds to registered MCP skills.
+- File uploads extract text before summarization.
+- The backend can run with Bedrock enabled or use local fallback responses.
